@@ -1,0 +1,102 @@
+{
+	"Version": "2012-10-17",
+	"Statement": [
+		{
+			"Sid": "VisualEditor0",
+			"Effect": "Allow",
+			"Action": [
+				"rds:*",
+				"s3:*",
+				"ecr:*",
+				"ec2:*",
+				"eks:*",
+				"sqs:*",
+				"dynamodb:*",
+				"elasticache:*"
+			],
+			"Resource": "*"
+		},
+		{
+			"Sid": "ReadLabRole",
+			"Effect": "Allow",
+			"Action": [
+				"iam:GetRole"
+			],
+			"Resource": "arn:aws:iam::*:role/LabRole"
+		},
+		{
+			"Sid": "PassLabRoleToEks",
+			"Effect": "Allow",
+			"Action": "iam:PassRole",
+			"Resource": "arn:aws:iam::*:role/LabRole",
+			"Condition": {
+				"StringEquals": {
+					"iam:PassedToService": "eks.amazonaws.com"
+				}
+			}
+		},
+		{
+			"Sid": "ManageEksIamRoles",
+			"Effect": "Allow",
+			"Action": [
+				"iam:CreateRole",
+				"iam:DeleteRole",
+				"iam:GetRole",
+				"iam:TagRole",
+				"iam:UntagRole",
+				"iam:AttachRolePolicy",
+				"iam:DetachRolePolicy",
+				"iam:ListAttachedRolePolicies",
+				"iam:ListInstanceProfilesForRole",
+				"iam:PutRolePolicy",
+				"iam:GetRolePolicy",
+				"iam:DeleteRolePolicy",
+				"iam:ListRolePolicies"
+			],
+			"Resource": [
+				"arn:aws:iam::*:role/*-eks-cluster-role",
+				"arn:aws:iam::*:role/*-eks-node-role"
+			]
+		},
+		{
+			"Sid": "PassEksRoles",
+			"Effect": "Allow",
+			"Action": "iam:PassRole",
+			"Resource": [
+				"arn:aws:iam::*:role/*-eks-cluster-role",
+				"arn:aws:iam::*:role/*-eks-node-role"
+			],
+			"Condition": {
+				"StringEquals": {
+					"iam:PassedToService": "eks.amazonaws.com"
+				}
+			}
+		},
+		{
+			"Sid": "ReadEksServiceLinkedRoles",
+			"Effect": "Allow",
+			"Action": "iam:GetRole",
+			"Resource": [
+				"arn:aws:iam::*:role/aws-service-role/eks.amazonaws.com/AWSServiceRoleForAmazonEKS",
+				"arn:aws:iam::*:role/aws-service-role/eks-nodegroup.amazonaws.com/AWSServiceRoleForAmazonEKSNodegroup"
+			]
+		},
+		{
+			"Sid": "CreateEksServiceLinkedRoles",
+			"Effect": "Allow",
+			"Action": "iam:CreateServiceLinkedRole",
+			"Resource": [
+				"arn:aws:iam::*:role/aws-service-role/eks.amazonaws.com/AWSServiceRoleForAmazonEKS",
+				"arn:aws:iam::*:role/aws-service-role/eks-nodegroup.amazonaws.com/AWSServiceRoleForAmazonEKSNodegroup"
+			],
+			"Condition": {
+				"StringEquals": {
+					"iam:AWSServiceName": [
+						"eks.amazonaws.com",
+						"eks-nodegroup.amazonaws.com"
+					]
+				}
+			}
+		}
+	]
+}

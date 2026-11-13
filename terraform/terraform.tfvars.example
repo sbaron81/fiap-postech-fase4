@@ -1,0 +1,25 @@
+# Copie para terraform.tfvars e ajuste conforme necessario.
+
+aws_region   = "us-east-1"
+project_name = "fiap-fase4"
+cluster_name = "fiap-fase4"
+
+# kubernetes_version = "1.31"  # deixe comentado para usar a versao estavel mais recente
+
+node_instance_types = ["t3.medium"]
+node_desired_size   = 2
+node_min_size       = 1
+node_max_size       = 4
+
+sqs_queue_name      = "fiap-fase4-toggle-events"
+dynamodb_table_name = "ToggleMasterAnalytics"
+elasticache_name    = "evaluation-service"
+
+argocd_namespace = "argocd"
+# argocd_chart_version = "7.7.11"  # deixe comentado para usar a versao mais recente
+argocd_server_service_type = "LoadBalancer"
+
+# Repositorio GitOps (manifests Kustomize de cada servico) que o ArgoCD acompanha
+gitops_repo_url        = "https://github.com/sbaron81/fiap-gitops"
+gitops_target_revision = "main"
+enable_argocd_apps     = true
