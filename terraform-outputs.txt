@@ -60,3 +60,7 @@ rds_endpoints = {
 }
 sqs_queue_url = "https://sqs.us-east-1.amazonaws.com/343770067934/fiap-fase4-toggle-events"
 vpc_id = "vpc-08460a3d8e47f34c3"
+
+
+terraform output -json rds_database_urls
+{"auth-service":"postgres://postgres:QsKteQWBjbtyiIXk3zab@fiap-fase4-auth-service.c3ivnpwh3dp3.us-east-1.rds.amazonaws.com:5432/auth_db","flag-service":"postgres://postgres:v6oB9fcmntgg5APfUftw@fiap-fase4-flag-service.c3ivnpwh3dp3.us-east-1.rds.amazonaws.com:5432/flags_db","targeting-service":"postgres://postgres:N3MATizPZcAZ4sZzLNVP@fiap-fase4-targeting-service.c3ivnpwh3dp3.us-east-1.rds.amazonaws.com:5432/targeting_db"}
