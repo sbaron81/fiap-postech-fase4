@@ -1,0 +1,62 @@
+Outputs:
+
+argocd_applications = tolist([
+  "auth-service",
+  "flag-service",
+  "targeting-service",
+  "evaluation-service",
+  "analytics-service",
+])
+argocd_get_admin_password = "kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d; echo"
+argocd_get_server_address = "kubectl -n argocd get svc argocd-server -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'; echo"
+configure_kubectl = "aws eks update-kubeconfig --region us-east-1 --name fiap-fase4"
+dynamodb_table_name = "ToggleMasterAnalytics"
+ecr_repository_urls = {
+  "fiap/analytics-service" = "343770067934.dkr.ecr.us-east-1.amazonaws.com/fiap/analytics-service"
+  "fiap/auth-service" = "343770067934.dkr.ecr.us-east-1.amazonaws.com/fiap/auth-service"
+  "fiap/evaluation-service" = "343770067934.dkr.ecr.us-east-1.amazonaws.com/fiap/evaluation-service"
+  "fiap/flag-service" = "343770067934.dkr.ecr.us-east-1.amazonaws.com/fiap/flag-service"
+  "fiap/targeting-service" = "343770067934.dkr.ecr.us-east-1.amazonaws.com/fiap/targeting-service"
+}
+eks_cluster_endpoint = "https://C0BCFC651E2207D0C4FF0109A85444FB.gr7.us-east-1.eks.amazonaws.com"
+eks_cluster_name = "fiap-fase4"
+elasticache_redis_url = "rediss://evaluation-service-t0uqzp.serverless.use1.cache.amazonaws.com:6379"
+github_actions_variables = {
+  "analytics-service" = {
+    "AWS_REGION" = "us-east-1"
+    "ECR_ANALYTICS" = "343770067934.dkr.ecr.us-east-1.amazonaws.com/fiap/analytics-service"
+  }
+  "auth-service" = {
+    "AWS_REGION" = "us-east-1"
+    "ECR_AUTH" = "343770067934.dkr.ecr.us-east-1.amazonaws.com/fiap/auth-service"
+  }
+  "evaluation-service" = {
+    "AWS_REGION" = "us-east-1"
+    "ECR_EVALUATION" = "343770067934.dkr.ecr.us-east-1.amazonaws.com/fiap/evaluation-service"
+  }
+  "flag-service" = {
+    "AWS_REGION" = "us-east-1"
+    "ECR_FLAG" = "343770067934.dkr.ecr.us-east-1.amazonaws.com/fiap/flag-service"
+  }
+  "targeting-service" = {
+    "AWS_REGION" = "us-east-1"
+    "ECR_TARGETING" = "343770067934.dkr.ecr.us-east-1.amazonaws.com/fiap/targeting-service"
+  }
+}
+ingress_get_address = "kubectl -n ingress-nginx get svc ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'; echo"
+private_subnet_ids = [
+  "subnet-0ca52c519d52dbce4",
+  "subnet-048daa5dc54d1453a",
+]
+public_subnet_ids = [
+  "subnet-0c32207676c22a766",
+  "subnet-0f3774ae2e7a5eee2",
+]
+rds_database_urls = <sensitive>
+rds_endpoints = {
+  "auth-service" = "fiap-fase4-auth-service.c3ivnpwh3dp3.us-east-1.rds.amazonaws.com:5432"
+  "flag-service" = "fiap-fase4-flag-service.c3ivnpwh3dp3.us-east-1.rds.amazonaws.com:5432"
+  "targeting-service" = "fiap-fase4-targeting-service.c3ivnpwh3dp3.us-east-1.rds.amazonaws.com:5432"
+}
+sqs_queue_url = "https://sqs.us-east-1.amazonaws.com/343770067934/fiap-fase4-toggle-events"
+vpc_id = "vpc-08460a3d8e47f34c3"
