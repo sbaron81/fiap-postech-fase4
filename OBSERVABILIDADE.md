@@ -932,7 +932,7 @@ for message in messages:
 3. Confira se os pods subiram e se o collector está recebendo dados:
 
 ```bash
-kubectl -n observability logs ds/otel-collector --tail=50
+kubectl -n observability logs ds/otel-collector-agent --tail=50   # o chart acrescenta "-agent" no modo daemonset
 ```
 
 ## 6. Dashboard customizado no Grafana
@@ -1515,7 +1515,7 @@ Tire prints de cada etapa para a entrega.
 | Pods em `Pending` | `kubectl describe pod`: falta CPU/memória ou o limite de pods por nó (ver passo 1) |
 | `kube-prometheus-stack` OutOfSync / erro de CRD | confirme `ServerSideApply=true` na Application |
 | Grafana em `CreateContainerConfigError` | os Secrets `grafana-admin` / `grafana-alerting` não existem (passo 3) |
-| Sem métricas `http_server_*` | `kubectl -n observability logs ds/otel-collector`: erros no `prometheusremotewrite`? Confirme `enableRemoteWriteReceiver` |
+| Sem métricas `http_server_*` | `kubectl -n observability logs ds/otel-collector-agent`: erros no `prometheusremotewrite`? Confirme `enableRemoteWriteReceiver` |
 | Métricas Python com nome `http_server_duration_*` | falta `OTEL_SEMCONV_STABILITY_OPT_IN=http` no ConfigMap |
 | Nada no New Relic | license key errada (403 no log do collector) ou região errada (US x EU) |
 | Trace "quebrado" (flag/targeting em traces separados) | o `evaluation-service` não está usando `NewRequestWithContext(ctx)` e `otelhttp.NewTransport` |
