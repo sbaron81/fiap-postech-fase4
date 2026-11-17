@@ -83,6 +83,33 @@ Redis). Atualize e faça push no `fiap-gitops`, que o ArgoCD aplica sozinho:
 
 Os valores em `secret.yaml` vão em base64 (`echo -n '<valor>' | base64 -w0`).
 
+### Credencial do `fiap-gitops` no ArgoCD
+
+Como o `fiap-gitops` é privado (ver [aviso abaixo](#️-atenção-senhas-no-repositório-gitops)),
+o ArgoCD precisa de uma credencial para lê-lo. Sem ela, as `Application` ficam
+com sync `Unknown` e o erro `authentication required: Repository not found`.
+
+Crie um PAT fine-grained no GitHub com *Contents: Read-only* no `fiap-gitops`
+e cadastre-o no cluster:
+
+```bash
+kubectl -n argocd create secret generic fiap-gitops-repo \
+  --from-literal=type=git \
+  --from-literal=url=https://github.com/sbaron81/fiap-gitops \
+  --from-literal=username=sbaron81 \
+  --from-literal=password=<PAT>
+kubectl -n argocd label secret fiap-gitops-repo argocd.argoproj.io/secret-type=repository
+```
+
+Confira se o sync saiu de `Unknown`:
+
+```bash
+kubectl -n argocd get applications
+```
+
+> Esse Secret não é gerenciado pelo Terraform: repita este passo depois de
+> cada `terraform destroy` / `apply`.
+
 ## 5. Usuário IAM para o GitHub Actions
 
 Crie um usuário separado (ex.: `github-actions`), só com permissão de push
@@ -99,6 +126,14 @@ Em **cada um dos 5 repositórios de serviço**:
 | Secret | `GITOPS_TOKEN` | PAT fine-grained do GitHub com *Contents: Read and write* no `fiap-gitops` |
 | Variable | `AWS_REGION` | `terraform output github_actions_variables` |
 | Variable | `ECR_<SERVICO>` (ex.: `ECR_AUTH`) | `terraform output github_actions_variables` |
+
+Para cadastrar tudo de uma vez nos 5 repositórios via `gh` CLI (pede os 3
+secrets no terminal e lê as variables do `terraform output`):
+
+```bash
+gh auth status   # precisa estar logado com acesso aos repositórios
+./scripts/github-actions-secrets.sh
+```
 
 ## 6. Publicar as imagens
 
@@ -141,11 +176,11 @@ Depois que o `auth-service` subir, gere uma nova chave nele e atualize o
 
 ## ⚠️ Atenção: senhas no repositório GitOps
 
-O `fiap-gitops` é público e os `secret.yaml` guardam as senhas reais do RDS
-em base64, que não é criptografia. Para não expor as credenciais novas:
+Os `secret.yaml` do `fiap-gitops` guardam as senhas reais do RDS em base64,
+que não é criptografia. Para não expor as credenciais:
 
-- torne o `fiap-gitops` privado e cadastre-o no ArgoCD (Settings >
-  Repositories, ou um Secret com label `argocd.argoproj.io/secret-type: repository`); ou
+- mantenha o `fiap-gitops` privado e cadastre-o no ArgoCD (ver
+  [Credencial do `fiap-gitops` no ArgoCD](#credencial-do-fiap-gitops-no-argocd)); ou
 - tire os Secrets do Git (ex.: Sealed Secrets / External Secrets).
 
 ## Derrubando o ambiente
