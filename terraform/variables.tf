@@ -96,6 +96,12 @@ variable "keda_chart_version" {
   default     = null
 }
 
+variable "metrics_server_chart_version" {
+  description = "null = usa a versao mais recente do chart metrics-server"
+  type        = string
+  default     = null
+}
+
 variable "ingress_nginx_namespace" {
   type    = string
   default = "ingress-nginx"

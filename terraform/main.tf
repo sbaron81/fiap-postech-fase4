@@ -91,6 +91,16 @@ module "keda" {
   depends_on = [module.eks]
 }
 
+# Fornece a API metrics.k8s.io usada pelos triggers cpu/memory do KEDA
+# (ScaledObject do evaluation-service no fiap-gitops).
+module "metrics_server" {
+  source = "./modules/metrics-server"
+
+  chart_version = var.metrics_server_chart_version
+
+  depends_on = [module.eks]
+}
+
 module "ingress_nginx" {
   source = "./modules/ingress-nginx"
 
