@@ -497,11 +497,25 @@ kubectl -n observability get pods
 
 Acesso ao Grafana:
 
+O Grafana fica exposto pela internet no mesmo NLB dos serviços, no path
+`/grafana` (`grafana.ingress` + `serve_from_sub_path` no values do
+`kube-prometheus-stack`):
+
 ```bash
+# endereço do NLB (mesmo dos serviços)
+cd terraform && terraform output -raw ingress_get_address | bash
+# http://<endereco-do-lb>/grafana/
+
+# alternativa sem passar pela internet
 kubectl -n observability port-forward svc/kps-grafana 3000:80
-# http://localhost:3000, usuário admin, senha:
+# http://localhost:3000/grafana/
+
+# usuário admin, senha:
 kubectl -n observability get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d
 ```
+
+> O NLB é HTTP sem TLS: a senha do admin trafega em texto claro. Use uma
+> senha forte (o `openssl rand` do passo 3) e não reutilize em outro lugar.
 
 ## 5. Instrumentação dos microsserviços
 
@@ -1145,7 +1159,8 @@ groups:
             últimos 5 minutos. A automação de self-healing vai executar
             rollout restart em deployment/auth-service.
           runbook_url: https://github.com/sbaron81/fiap-postech-fase4/actions/workflows/self-healing.yml
-          dashboard: http://localhost:3000/d/toggle-master
+          # Grafana serve em /grafana (ingress e port-forward): http://<endereco-do-lb>/grafana/d/toggle-master
+          dashboard: http://localhost:3000/grafana/d/toggle-master
 ```
 
 ### 7.2 Contact points e roteamento
