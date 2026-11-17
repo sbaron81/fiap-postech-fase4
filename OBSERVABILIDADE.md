@@ -519,8 +519,8 @@ kubectl -n observability get secret grafana-admin -o jsonpath='{.data.admin-pass
 
 ## 5. Instrumentação dos microsserviços
 
-Todos os serviços usam o SDK do OpenTelemetry e enviam OTLP/gRPC para o
-collector do nó. Nenhum deles fala direto com Prometheus, Loki ou New Relic.
+Todos os serviços usam o SDK do OpenTelemetry e enviam OTLP para o
+collector do nó (gRPC/4317 nos serviços Go, HTTP/4318 nos Python, ver 5.1). Nenhum deles fala direto com Prometheus, Loki ou New Relic.
 
 | Serviço | Linguagem | Instrumentação |
 |---|---|---|
@@ -546,7 +546,16 @@ monta o Service Map com os 5 serviços.
 ### 5.1 Variáveis de ambiente (`fiap-gitops`)
 
 Acrescente ao `base/configmap.yaml` de **cada** serviço, trocando o
-`OTEL_SERVICE_NAME`:
+`OTEL_SERVICE_NAME`. Nos serviços **Python**, use OTLP/HTTP em vez de gRPC:
+o `opentelemetry-instrument` cria o exporter no master do gunicorn, antes do
+fork do worker, e o canal gRPC não é seguro para fork:
+
+```yaml
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability.svc.cluster.local:4318"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+```
+
+Bloco completo (Go):
 
 ```yaml
   OTEL_SERVICE_NAME: "auth-service"
@@ -570,18 +579,20 @@ ver 5.4):
   OTEL_PYTHON_DISABLED_INSTRUMENTATIONS: "boto3sqs"
 ```
 
-Nos serviços Python, suba o limite de memória do `deployment.yaml` de 128Mi
-para **256Mi**, porque o SDK de OpenTelemetry aumenta o consumo.
+Nos serviços Python, o limite de memória do `deployment.yaml` precisa ser de
+pelo menos **256Mi**, porque o SDK de OpenTelemetry aumenta o consumo.
 
 ### 5.2 Go: `auth-service`
 
 ```bash
-go get go.opentelemetry.io/otel \
-       go.opentelemetry.io/otel/sdk \
-       go.opentelemetry.io/otel/sdk/metric \
-       go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc \
-       go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc \
-       go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
+# Versões fixadas: a partir do otel v1.47.0 / otelhttp v0.72.0 o mínimo é
+# Go 1.26, e o CI e o Dockerfile usam Go 1.25.
+go get go.opentelemetry.io/otel@v1.46.0 \
+       go.opentelemetry.io/otel/sdk@v1.46.0 \
+       go.opentelemetry.io/otel/sdk/metric@v1.46.0 \
+       go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc@v1.46.0 \
+       go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc@v1.46.0 \
+       go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp@v0.71.0
 ```
 
 Novo arquivo `telemetry.go` (é o mesmo nos dois serviços Go):
@@ -841,12 +852,13 @@ Instrumentação automática, sem mudar o código dos dois primeiros.
 `requirements.txt` (nos 3):
 
 ```text
-opentelemetry-distro
-opentelemetry-exporter-otlp
+opentelemetry-distro==0.66b2
+opentelemetry-exporter-otlp==1.45.2
 ```
 
-> Depois do primeiro build que funcionar, fixe as versões que o `pip` instalou
-> (`pip freeze | grep opentelemetry`) para os builds serem reproduzíveis.
+> O `opentelemetry-bootstrap` instala as instrumentações na versão casada com
+> o `opentelemetry-distro`, então fixar essas duas basta para o build ser
+> reproduzível.
 
 `Dockerfile` (exemplo do analytics; nos outros só muda a porta):
 
@@ -855,7 +867,7 @@ FROM python:3.11-slim
 
 WORKDIR /app/
 
-COPY ./analytics-service .
+COPY . .
 
 # opentelemetry-bootstrap detecta as libs instaladas (flask, requests,
 # psycopg2, botocore...) e instala os pacotes de instrumentação de cada uma
@@ -878,13 +890,17 @@ from opentelemetry.trace import SpanKind
 
 tracer = trace.get_tracer("analytics-service")
 
-# em sqs_worker_loop():
-response = sqs_client.receive_message(
-    QueueUrl=SQS_QUEUE_URL,
-    MaxNumberOfMessages=10,
-    WaitTimeSeconds=20,
-    MessageAttributeNames=["All"],   # sem isso o traceparent não vem na mensagem
-)
+from opentelemetry.instrumentation.utils import suppress_instrumentation
+
+# em sqs_worker_loop(). Sem o suppress_instrumentation, cada long-poll (com ou
+# sem mensagem) vira um trace raiz "SQS.ReceiveMessage" a cada 20s.
+with suppress_instrumentation():
+    response = sqs_client.receive_message(
+        QueueUrl=SQS_QUEUE_URL,
+        MaxNumberOfMessages=10,
+        WaitTimeSeconds=20,
+        MessageAttributeNames=["All"],   # sem isso o traceparent não vem na mensagem
+    )
 # ...
 for message in messages:
     carrier = {
