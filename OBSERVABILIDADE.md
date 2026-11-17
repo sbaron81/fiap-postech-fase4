@@ -425,6 +425,9 @@ config:
     resource/cluster:
       attributes:
         - { key: k8s.cluster.name, value: fiap-fase4, action: upsert }
+        # O preset kubernetesAttributes preenche service.namespace com o
+        # namespace do pod, e aí o job do Prometheus vira "<namespace>/<serviço>".
+        - { key: service.namespace, action: delete }
 
   exporters:
     # Métricas de aplicação -> Prometheus
@@ -460,8 +463,9 @@ config:
 
 > O `prometheusremotewrite` grava o `service.name` do recurso OTel no label
 > `job` do Prometheus. Por isso as queries abaixo filtram por
-> `job="auth-service"`. Não defina `service.namespace` nos serviços: com ele,
-> o `job` vira `<namespace>/<serviço>`.
+> `job="auth-service"`. Se existir `service.namespace`, o `job` vira
+> `<namespace>/<serviço>`. As versões atuais do preset `kubernetesAttributes`
+> preenchem esse atributo sozinhas, e por isso o `resource/cluster` o remove.
 
 ### 4.4 Registrar no ArgoCD (app-of-apps)
 
