@@ -104,6 +104,33 @@ resource "aws_eks_cluster" "this" {
   depends_on = [aws_iam_role_policy_attachment.cluster_policy]
 }
 
+# Launch template só para ajustar o IMDS. Nos nodes Amazon Linux 2023 o
+# IMDSv2 vem com hop limit 1: o pod está a um salto de rede do node, então a
+# resposta do IMDS não chega até ele e o boto3/aws-sdk falham com "Unable to
+# locate credentials". Os serviços (analytics/evaluation) usam a IAM role do
+# node para SQS/DynamoDB (no AWS Academy não dá para criar roles para IRSA),
+# então os pods precisam alcançar o IMDS: hop limit 2.
+# Com launch template o disk_size do node group não é permitido, por isso o
+# tamanho do disco veio para cá.
+resource "aws_launch_template" "node" {
+  name_prefix = "${var.cluster_name}-node-"
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 2
+  }
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+    ebs {
+      volume_size           = var.node_disk_size
+      volume_type           = "gp3"
+      delete_on_termination = true
+    }
+  }
+}
+
 resource "aws_eks_node_group" "default" {
   cluster_name    = aws_eks_cluster.this.name
   node_group_name = "${var.cluster_name}-default"
@@ -111,8 +138,12 @@ resource "aws_eks_node_group" "default" {
   subnet_ids      = var.node_subnet_ids
 
   instance_types = var.node_instance_types
-  disk_size      = var.node_disk_size
   capacity_type  = "ON_DEMAND"
+
+  launch_template {
+    id      = aws_launch_template.node.id
+    version = aws_launch_template.node.latest_version
+  }
 
   scaling_config {
     desired_size = var.node_desired_size
