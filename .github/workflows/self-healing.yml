@@ -46,6 +46,14 @@ jobs:
           mkdir -p ~/.kube
           echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
+          # Sem server o kubectl cai em localhost:8080 com um erro confuso.
+          # Valida antes de qualquer chamada ao cluster.
+          SERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null || true)
+          if [ -z "$SERVER" ]; then
+            echo "::error::kubeconfig do secret SELF_HEALER_KUBECONFIG está inválido ou sem server. Regenere-o (OBSERVABILIDADE.md, passo 8.2)"
+            exit 1
+          fi
+          echo "cluster: ${SERVER%%.*}..."
 
       - name: Estado antes
         run: kubectl -n "$NAMESPACE" get deployment "$DEPLOYMENT" -o wide

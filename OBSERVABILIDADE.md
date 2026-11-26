@@ -1319,40 +1319,56 @@ type: kubernetes.io/service-account-token
 
 ### 8.2 Kubeconfig como secret do GitHub
 
-Depois que o `observability-config` sincronizar:
+Depois que o `observability-config` sincronizar. O `server` vem do kubeconfig
+que você já usa (e não do `aws eks describe-cluster`): no AWS Academy as
+credenciais expiram e o terminal pode estar em outra conta, e aí o comando
+falha, o `server` fica vazio e o `kubectl` do workflow cai em
+`localhost:8080`. O script para sozinho se algum valor vier vazio e só grava o
+secret se o teste de permissões passar:
 
 ```bash
-CLUSTER=fiap-fase4
-SERVER=$(aws eks describe-cluster --name "$CLUSTER" --query cluster.endpoint --output text)
+SERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
 CA=$(kubectl -n auth-service get secret self-healer-token -o jsonpath='{.data.ca\.crt}')
 TOKEN=$(kubectl -n auth-service get secret self-healer-token -o jsonpath='{.data.token}' | base64 -d)
-
-cat > self-healer.kubeconfig <<EOF
+if [ -z "$SERVER" ] || [ -z "$CA" ] || [ -z "$TOKEN" ]; then
+  echo "ERRO: server, CA ou token vazio"; unset TOKEN
+else
+  echo "server: $SERVER"
+  cat > self-healer.kubeconfig <<EOF
 apiVersion: v1
 kind: Config
 clusters:
-  - name: $CLUSTER
+  - name: fiap-fase4
     cluster: { server: $SERVER, certificate-authority-data: $CA }
 users:
   - name: self-healer
     user: { token: $TOKEN }
 contexts:
   - name: self-healer
-    context: { cluster: $CLUSTER, user: self-healer, namespace: auth-service }
+    context: { cluster: fiap-fase4, user: self-healer, namespace: auth-service }
 current-context: self-healer
 EOF
+  unset TOKEN
 
-# testa as permissões: precisa responder "yes" e depois "no"
-kubectl --kubeconfig self-healer.kubeconfig auth can-i patch deployment/auth-service
-kubectl --kubeconfig self-healer.kubeconfig auth can-i delete deployment/auth-service
-
-base64 -w0 self-healer.kubeconfig   # copie a saída
-rm self-healer.kubeconfig
+  # permissões: patch precisa ser "yes" e delete "no"; só então grava o secret
+  if [ "$(kubectl --kubeconfig self-healer.kubeconfig auth can-i patch deployment/auth-service)" = yes ] && \
+     [ "$(kubectl --kubeconfig self-healer.kubeconfig auth can-i delete deployment/auth-service 2>/dev/null)" = no ]; then
+    base64 -w0 self-healer.kubeconfig | gh secret set SELF_HEALER_KUBECONFIG -R sbaron81/fiap-postech-fase4 \
+      && echo "secret SELF_HEALER_KUBECONFIG atualizado"
+  else
+    echo "ERRO: teste de permissões falhou, secret NÃO foi atualizado"
+  fi
+  rm -f self-healer.kubeconfig
+fi
 ```
 
-No `fiap-postech-fase4`: **Settings > Secrets and variables > Actions > New
-repository secret**, com nome `SELF_HEALER_KUBECONFIG` e valor igual à saída
-do `base64`.
+Sem o `gh`: troque a linha do `gh secret set` por `base64 -w0
+self-healer.kubeconfig` e cole a saída em **Settings > Secrets and variables >
+Actions > New repository secret**, com nome `SELF_HEALER_KUBECONFIG`.
+
+> Se o token do ServiceAccount vazar, rotacione: `kubectl -n auth-service
+> delete secret self-healer-token` (o ArgoCD recria e o Kubernetes gera um
+> token novo, invalidando o antigo) e rode este passo de novo.
 
 > O endpoint do EKS precisa ser público (`endpoint_public_access = true`,
 > o padrão do módulo) para o runner do GitHub alcançá-lo.
@@ -1410,6 +1426,14 @@ jobs:
           mkdir -p ~/.kube
           echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
+          # Sem server o kubectl cai em localhost:8080 com um erro confuso.
+          # Valida antes de qualquer chamada ao cluster.
+          SERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null || true)
+          if [ -z "$SERVER" ]; then
+            echo "::error::kubeconfig do secret SELF_HEALER_KUBECONFIG está inválido ou sem server. Regenere-o (OBSERVABILIDADE.md, passo 8.2)"
+            exit 1
+          fi
+          echo "cluster: ${SERVER%%.*}..."
 
       - name: Estado antes
         run: kubectl -n "$NAMESPACE" get deployment "$DEPLOYMENT" -o wide
