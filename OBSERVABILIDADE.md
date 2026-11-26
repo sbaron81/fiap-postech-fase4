@@ -1403,6 +1403,10 @@ jobs:
         env:
           KUBECONFIG_B64: ${{ secrets.SELF_HEALER_KUBECONFIG }}
         run: |
+          if [ -z "$KUBECONFIG_B64" ]; then
+            echo "::error::secret SELF_HEALER_KUBECONFIG não configurado (OBSERVABILIDADE.md, passo 8.2)"
+            exit 1
+          fi
           mkdir -p ~/.kube
           echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config

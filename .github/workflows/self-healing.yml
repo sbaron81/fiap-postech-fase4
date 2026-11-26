@@ -1,0 +1,69 @@
+name: self-healing
+
+on:
+  # disparado pelo contact point "webhook" do Grafana
+  repository_dispatch:
+    types: [grafana-alert]
+  # disparo manual, para testar sem o alerta
+  workflow_dispatch:
+    inputs:
+      namespace: { default: auth-service, required: true }
+      deployment: { default: auth-service, required: true }
+
+permissions:
+  contents: read
+
+concurrency:
+  group: self-healing
+  cancel-in-progress: false
+
+jobs:
+  rollout-restart:
+    # só age quando o alerta está disparando (ignora "resolved")
+    if: github.event_name == 'workflow_dispatch' || github.event.client_payload.status == 'firing'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NAMESPACE: ${{ github.event.client_payload.namespace || inputs.namespace }}
+      DEPLOYMENT: ${{ github.event.client_payload.deployment || inputs.deployment }}
+      ALERT: ${{ github.event.client_payload.alertname || 'manual' }}
+    steps:
+      - name: Validar alvo (allowlist)
+        run: |
+          case "$NAMESPACE/$DEPLOYMENT" in
+            auth-service/auth-service) echo "alvo permitido: $NAMESPACE/$DEPLOYMENT" ;;
+            *) echo "::error::alvo não permitido: '$NAMESPACE/$DEPLOYMENT'"; exit 1 ;;
+          esac
+
+      - name: Configurar kubeconfig
+        env:
+          KUBECONFIG_B64: ${{ secrets.SELF_HEALER_KUBECONFIG }}
+        run: |
+          if [ -z "$KUBECONFIG_B64" ]; then
+            echo "::error::secret SELF_HEALER_KUBECONFIG não configurado (OBSERVABILIDADE.md, passo 8.2)"
+            exit 1
+          fi
+          mkdir -p ~/.kube
+          echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Estado antes
+        run: kubectl -n "$NAMESPACE" get deployment "$DEPLOYMENT" -o wide
+
+      - name: Rollout restart
+        run: kubectl -n "$NAMESPACE" rollout restart deployment/"$DEPLOYMENT"
+
+      - name: Aguardar rollout
+        run: kubectl -n "$NAMESPACE" rollout status deployment/"$DEPLOYMENT" --timeout=180s
+
+      - name: Resumo
+        if: always()
+        run: |
+          {
+            echo "### Self-healing: \`$NAMESPACE/$DEPLOYMENT\`"
+            echo "- Alerta: $ALERT"
+            echo "- Resultado: ${{ job.status }}"
+            echo '```'
+            kubectl -n "$NAMESPACE" get pods -l app="$DEPLOYMENT" -o wide || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
